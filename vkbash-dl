@@ -1,0 +1,38 @@
+#!/bin/bash
+# Author: Vinícius Madureira <viniciusmadureira@outlook.com>
+# Version: 0.1
+# Date: April 18th, 2018
+# Script: Bash Vk Downloader (vkbash-dl)
+# Dependencies: GNU bash 4.3.42(1); GNU coreutils 8.24; curl 7.43.0; GNU Wget 1.18; GNU grep 2.22; GNU sed 4.2.2
+
+# Download medias
+function download() {
+	medias="$1"
+	for media in $medias; do
+		media_url=$(echo "$media" | grep --perl-regex --only-matching '(?U)(?<=\&quot;)(\w+(\/)){3,}.*(?=\&quot;)' | awk 'END { print }' | sed --expression='s/^/https:\/\/pp.userapi.com\//g' --expression='s/$/\.jpg/g')
+		printf -v filename "%s%06d%s" "$account_name"'_' $((++count)) ".${media_url##*.}"
+		wget --quiet "$media_url" --output-document="$filename"
+	done
+}
+
+# Get account page and set its atributes
+account_name="$1"
+account_page=$(curl --silent --location "https://vk.com/$account_name")
+owner_id=$(echo "$account_page" | grep --perl-regexp --only-matching '(?<=\/albums)\d+')
+count_medias=$(echo "$account_page" | grep --perl-regexp --only-matching '(?<=counter">)[\d,]+(?=<)' | sed --expression='s/[^[:digit:]]//g' --expression='1!d')
+
+# Get account page of each medias's offset through XMLHttpRequest (XHR) and download medias
+offset=0
+count=0
+while :; do
+	page_medias=$(curl --silent "https://vk.com/al_photos.php" --data "act=show_albums&al=1&offset=$offset&only_photos=1&owner=$owner_id&part=1")
+	medias=$(echo "$page_medias" | grep --perl-regexp --only-matching '(?U)\{\&quot.*]}')
+	download "$medias"
+	if [[ "$offset" -eq "$count_medias" ]]; then
+		break
+	fi
+	offset=$(echo "$page_medias" | grep --perl-regexp --only-matching '(?<=<\!int>)\d+(?=<\!>)')		
+done
+exit 0
+
+# ./vkbash-dl "account_name"
